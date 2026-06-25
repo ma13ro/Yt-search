@@ -1,4 +1,5 @@
 {
   "name": "yt-search",
-  "version": "1.0.1"
+  "version": "1.0.1",
+  "type": "module"
 }

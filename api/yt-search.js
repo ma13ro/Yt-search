@@ -33,9 +33,10 @@ export default async function handler(req, res) {
     const decode = s => s.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
 
     const results = (data.items || []).map(item => ({
-      videoId: item.id?.videoId || '',
-      title:   decode(item.snippet?.title || ''),
-      author:  decode(item.snippet?.channelTitle || ''),
+      videoId:   item.id?.videoId || '',
+      title:     decode(item.snippet?.title || ''),
+      author:    decode(item.snippet?.channelTitle || ''),
+      thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '',
     })).filter(v => v.videoId);
 
     return res.status(200).json(results);

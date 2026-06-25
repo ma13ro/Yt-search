@@ -30,10 +30,12 @@ export default async function handler(req, res) {
     }
 
     const data = await r.json();
+    const decode = s => s.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+
     const results = (data.items || []).map(item => ({
       videoId: item.id?.videoId || '',
-      title:   item.snippet?.title || '',
-      author:  item.snippet?.channelTitle || '',
+      title:   decode(item.snippet?.title || ''),
+      author:  decode(item.snippet?.channelTitle || ''),
     })).filter(v => v.videoId);
 
     return res.status(200).json(results);

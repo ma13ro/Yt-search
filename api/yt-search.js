@@ -1,23 +1,12 @@
-// Vercel Serverless Function — YouTube Search Proxy v1
+// Vercel Serverless Function — YouTube Search Proxy v2
 // /api/yt-search.js
 //
-// Forwards search queries to public Invidious instances.
-// Tries each host in order until one responds successfully.
-// Deploy alongside proxy.js in the same /api/ folder.
+// Uses YouTube Data API v3 for reliable search.
+// API key stored in Vercel environment variable: YT_API_KEY
 //
 // Usage:
 //   GET /api/yt-search?q=IVE+Eleven
 //   Returns: JSON array of { videoId, title, author } objects
-
-// Piped is an open YouTube frontend with a public API
-// that is more reliably accessible from server/cloud IPs than Invidious.
-const PIPED_HOSTS = [
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.reallyaweso.me',
-  'https://pipedapi.smnz.de',
-  'https://piped-api.garudalinux.org',
-  'https://api.piped.yt',
-];
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,39 +17,28 @@ export default async function handler(req, res) {
   const { q } = req.query;
   if (!q) return res.status(400).json({ error: 'Missing ?q= parameter' });
 
-  for (const host of PIPED_HOSTS) {
-    try {
-      const response = await fetch(
-        `${host}/search?q=${encodeURIComponent(q)}&filter=videos`,
-        {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36',
-            'Accept': 'application/json',
-          },
-          signal: AbortSignal.timeout(7000),
-        }
-      );
+  const apiKey = process.env.YT_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
-      if (!response.ok) continue;
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(q)}&key=${apiKey}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
 
-      const data = await response.json();
-      const items = data.items || data.results || data;
-      if (!Array.isArray(items) || items.length === 0) continue;
-
-      // Piped returns url like "/watch?v=VIDEO_ID"
-      const results = items.slice(0, 8).map(v => ({
-        videoId: (v.url || '').replace('/watch?v=', '') || v.videoId || '',
-        title:   v.title  || '',
-        author:  v.uploaderName || v.author || '',
-      })).filter(v => v.videoId.length === 11);
-
-      if (results.length === 0) continue;
-      return res.status(200).json(results);
-
-    } catch (_) {
-      continue;
+    if (!r.ok) {
+      const err = await r.json();
+      return res.status(r.status).json({ error: err?.error?.message || 'YouTube API error' });
     }
-  }
 
-  return res.status(502).json({ error: 'All search servers unreachable' });
+    const data = await r.json();
+    const results = (data.items || []).map(item => ({
+      videoId: item.id?.videoId || '',
+      title:   item.snippet?.title || '',
+      author:  item.snippet?.channelTitle || '',
+    })).filter(v => v.videoId);
+
+    return res.status(200).json(results);
+
+  } catch (err) {
+    return res.status(502).json({ error: 'Search request failed' });
+  }
 }
